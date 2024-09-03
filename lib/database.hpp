@@ -6,15 +6,26 @@
 #include "io.hpp"
 #include "sqlite3.h"
 
+// Constants, feel free to edit.
+const int INVALID_ID = -1;
+const int MIN_NAME_SIZE = 3;
+const int MAX_NAME_SIZE = 24;
+const int MIN_PASS_SIZE = 8;
+const int MAX_PASS_SIZE = 24;
+const int MIN_AGE = 18;
+const int MAX_AGE = 99;
+const int MIN_AMOUNT = 5;
+const int MAX_AMOUNT = 2500;
+
 // Account struct for the account database.
 struct account {
    std::string name, pass;
    int id, age, balance;
 
-   account(): id(-1), name(""), pass(""), age(-1), balance(-1) {}
+   account(): id(INVALID_ID), name(""), pass(""), age(-1), balance(-1) {}
 
    account(std::string name, std::string pass, int age, int balance) 
-   : id(-1), name(name), pass(pass), age(age), balance(balance) {}
+   : id(INVALID_ID), name(name), pass(pass), age(age), balance(balance) {}
 
    account(int id, std::string name, std::string pass, int age, int balance) 
    : id(id), name(name), pass(pass), age(age), balance(balance) {}
@@ -42,10 +53,10 @@ struct transaction {
    std::string date, from, to;
    int id, fromId, toId, amount;
 
-   transaction(): date(""), id(-1), amount(-1), fromId(-1), toId(-1) {}
+   transaction(): date(""), id(INVALID_ID), amount(-1), fromId(-1), toId(-1) {}
 
    transaction(int amount, int fromId, int toId)
-   : date(""), id(-1), amount(amount), fromId(fromId), toId(toId) {}
+   : date(""), id(INVALID_ID), amount(amount), fromId(fromId), toId(toId) {}
 
    transaction(int id, int fromId, int toId, int amount, std::string date,
    std::string from, std::string to): date(date), id(id), amount(amount), 
@@ -116,25 +127,23 @@ public:
    // Create a new account if the given information is valid and it doesn't
    // exist yet.
    bool createAccount(const account& acc) {
-      // Username already exists.
-      if (selectByName(acc.name).id != -1) {
+      // Username already exists or it is a reserved one.
+      if (selectByName(acc.name).id != INVALID_ID || acc.name == "DELETED") {
          println("Could not create account with username '" + acc.name + "' as "
          "an account with that name already exists, try a different name!", RED);
          return false;
       }
 
       // Username too long or too short.
-      if (acc.name.size() > 24 || acc.name.size() < 3) {
-         println("Username is either too long or too short. Lower limit is 3 "
-         "and upper limit is 24.", RED);
+      if (acc.name.size() > MAX_NAME_SIZE || acc.name.size() < MIN_NAME_SIZE) {
+         println("Username is either too long or too short.", RED);
          return false;
       }
 
       // User too young or too old.
-      if (acc.age < 18 || acc.age > 99) {
+      if (acc.age < MIN_AGE || acc.age > MAX_AGE) {
          println("Age is either too low or too high. You must be atleast 18 to "
-         "use our program. If you're above 99 years old, please input '99' as "
-         "it is the upper limit.", RED);
+         "use our program.", RED);
          return false;
       }
 
@@ -158,30 +167,39 @@ public:
    }
 
    // Delete the account if it exists.
-   bool deleteAccount(int id) {
+   bool deleteAccount(account& acc) {
       // Account does not exist.
-      if (selectById(id).size() < 1) {
-         println("Account with id of '" + str(id) + "' does not exist, so it "
+      if (selectById(acc.id).size() < 1) {
+         println("Account with id of '" + str(acc.id) + "' does not exist, so it "
          "cannot be deleted.", RED);
          return false;
       }
 
-      // Create an SQL prepared statement.
-      std::string sql = "DELETE FROM ACCOUNTS WHERE ID = ?;";
-      sqlite3_stmt* stmt;
-      sqlite3_prepare_v2(db, sql.c_str(), -1, &stmt, 0);
+      // Force set name to DELETED to show up in transactions and set password
+      // to an unhashed string so no one can log into the account.
+      updatePass("DELETED", acc.id);
+      return update("NAME = 'DELETED'", acc.id);
+   }
 
-      // Bind to statement.
-      sqlite3_bind_int(stmt, 1, id);
-
-      // Finish up and check for errors.
-      int status = sqlite3_step(stmt);
-      sqlite3_finalize(stmt);
-      return handleInsertion(status, "Could not delete the account: ");
+   // Update user's password.
+   bool updatePass(std::string pass, int id) {
+      return update("PASS = '" + pass + "'", id);
    }
 
    // Update user's name.
    bool updateName(std::string name, int id) {
+      // Username already exists.
+      if (selectByName(name).id != INVALID_ID) {
+         println("Could not rename account to '" + name + "' as an account with "
+         "that name already exists, try a different name!", RED);
+         return false;
+      }
+
+      // Username is not the correct size.
+      if (name.size() < MIN_NAME_SIZE || name.size() > MAX_NAME_SIZE) {
+         println("Username is either too long or too short.", RED);
+         return false;
+      }
       return update("NAME = '" + name + "'", id);
    }
 
@@ -192,6 +210,12 @@ public:
 
    // Update user's age.
    bool updateAge(int age, int id) {
+      // User too old or too young.
+      if (age < MIN_AGE || age > MAX_AGE) {
+         println("Age is either too low or too high. You must be atleast 18 to "
+         "use our program.", RED);
+         return false;
+      }
       return update("AGE = " + str(age), id);
    }
 
@@ -216,16 +240,6 @@ public:
    // Select users by id.
    std::vector<account> selectById(int id, std::string op = "=") {
       return selectAccounts("WHERE ID " + op, id);
-   }
-
-   // Select users by age.
-   std::vector<account> selectByAge(int age, std::string op = "=") {
-      return selectAccounts("WHERE AGE " + op, age);
-   }
-
-   // Select users by balance.
-   std::vector<account> selectByBalance(int balance, std::string op = "=") {
-      return selectAccounts("WHERE BALANCE " + op, balance);
    }
 
 private:
@@ -293,7 +307,7 @@ public:
    Transactions(const Accounts& acc) : Database("database/database.db",
       "CREATE TABLE IF NOT EXISTS TRANSACTIONS("
       "ID INTEGER PRIMARY KEY AUTOINCREMENT, "
-      "SENDER INTEGER, "
+      "SENDER INTEGER NOT NULL, "
       "RECEIVER INTEGER NOT NULL, "
       "AMOUNT INTEGER NOT NULL, "
       "DATE DATETIME DEFAULT CURRENT_TIMESTAMP, "
@@ -311,8 +325,14 @@ public:
       }
 
       // Amount sent is not sufficient.
-      if (trans.amount < 1) {
-         println("Cannot send less than 1$.", RED);
+      if (trans.amount < MIN_AMOUNT) {
+         println("Cannot send less than " + str(MIN_AMOUNT) + "$.", RED);
+         return false;
+      }
+
+      // Amount sent is too large.
+      if (trans.amount > MAX_AMOUNT) {
+         println("Cannot send more than " + str(MAX_AMOUNT) + "$.", RED);
          return false;
       }
 

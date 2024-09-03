@@ -196,7 +196,8 @@ inline bool getConsent(std::string prompt, std::string color) {
    return getKey(prompt, color) == 'y';
 }
 
-// Hash a string for security reasons, for example, a password.
+// Hash a string for security reasons, for example, a password. This code is not
+// by me and i don't understand how it works.
 inline std::string hashString(std::string prompt) {
    unsigned char hash[SHA256_DIGEST_LENGTH];
    SHA256((unsigned char*)prompt.c_str(), prompt.size(), hash);
