@@ -1,4 +1,4 @@
-#include "../lib/database.hpp"
+#include "actions.hpp"
 
 // Pre-declare functions.
 account login(Accounts& db);
@@ -24,179 +24,50 @@ int main() {
    println("\nWelcome, " + acc.name + "!", BLUE);
    println("What would you like to do today?", BLUE);
 
+   // Action loop.
    while (true) {
-      // Garbage variables that might be used later.
-      int amount;
-      std::string username;
-      account receiver;
-      std::vector<transaction> transactions;
-      transaction trans;
-
       switch (getKey("Command (h for help) > ")) {
-         case 'h':
-            // Print command to the terminal.
-            println(
-               "> Q - quit\n> T - new transaction\n> R - last transaction\n"
-               "> L - list all transactions\n> B - check balance\n"
-               "> O - log out of your account\n> D - deposit money\n"
-               "> W - withdraw money\n> E - edit account\n", BLUE
-            );
-            break;
-         case 'q':
-            // Exit the program.
-            println("Quitting.", BLUE);
-            exit(0);
-         case 'd':
-            amount = getNumber("Amount to deposit > ", BLUE);
+      case 'h': 
+         help(); 
+         break;
+      case 'q':
+         println("Quitting.", BLUE);
+         exit(0);
+      case 'd':
+         deposit(acc.id, tr);
+         acc = db.selectById(acc.id).at(0);
+         break;
+      case 'w':
+         withdraw(acc, tr);
+         acc = db.selectById(acc.id).at(0);
+         break;
+      case 'e':
+         editAccount(acc, db);
 
-            // Create a transaction from BANK to user.
-            if (tr.createTransaction(transaction(amount, 1, acc.id))) {
-               println("Successfully deposited " + str(amount) + "$.", GREEN);
-            }
-
-            // Reload user.
-            acc = db.selectById(acc.id).at(0);
-            break;
-         case 'w':
-            amount = getNumber("Amount to withdraw > ", BLUE);
-
-            // Not enough money in bank account.
-            if (acc.balance < amount) {
-               println("You don't have enough money to withdraw " + str(amount)
-               + "$. You only have " + str(acc.balance) + "$.", RED);
-               break;
-            }
-
-            // Create a transaction from user to BANK.
-            if (tr.createTransaction(transaction(amount, acc.id, 1))) {
-               println("Successfully withdraw " + str(amount) + "$.", GREEN);
-            }
-
-            // Reload user data.
-            acc = db.selectById(acc.id).at(0);
-            break;
-         case 'e':
-            switch (getKey("Choose (A - age, N - name, P - password, D - delete) > ")) {
-               case 'a':
-                  // Update age.
-                  amount = getNumber("Input your new age > ", BLUE);
-                  
-                  if (db.updateAge(amount, acc.id)) {
-                     println("Successfully updated age.", GREEN);
-                  }
-                  acc = db.selectById(acc.id).at(0);
-                  break;
-               case 'n':
-                  // Update username.
-                  username = getInput("Input your new username > ", BLUE);
-                  
-                  if (db.updateName(username, acc.id)) {
-                     println("Successfully updated username.", GREEN);
-                  }
-                  acc = db.selectById(acc.id).at(0);
-                  break;
-               case 'p':
-                  // Update password if the user can provide his old one.
-                  username = getHiddenInput("Input your old password > ", BLUE);
-
-                  // Passwords don't match.
-                  if (acc.pass != hashString(username)) {
-                     println("Incorrect password.", RED);
-                     break;
-                  }
-
-                  username = getHiddenInput("Input your new password > ", BLUE);
-
-                  // New password is not the correct size.
-                  if (username.size() < MIN_PASS_SIZE || username.size() > MAX_PASS_SIZE) {
-                     println("Password too long or too short.", RED);
-                     break;
-                  }
-
-                  if (db.updatePass(hashString(username), acc.id)) {
-                     println("Successfully updated password.", GREEN);
-                  }
-                  acc = db.selectById(acc.id).at(0);
-                  break;
-               case 'd':
-                  if (!getConsent("Are you sure that you want to delete your "
-                  "account? This cannot be undone. [y/n] > ", ORANGE)) {
-                     println("Cancelled", RED);
-                  }
-
-                  if (db.deleteAccount(acc)) {
-                     println("Successfully deleted account.", GREEN);
-                  }
-                  return main();
-               default:
-                  println("Unknown option.", RED);
-                  break;
-            }
-            break;
-         case 't':
-            // Get receivers account.
-            username = getInput("Username to send the money to > ", BLUE);
-            receiver = db.selectByName(username);
-
-            // Receiver does not exist.
-            if (receiver.id == INVALID_ID || receiver.name == "DELETED") {
-               println("Could not find user '" + username + "'.", RED);
-               break;
-            }
-
-            // Get amount to be sent.
-            amount = getNumber("Amount to send (you have " + str(acc.balance)
-             + "$) > ", BLUE);
-
-            // Ask user for consent.
-            if (!getConsent("Are you sure you want to send " + str(amount) 
-            + "$ to '" + receiver.name + "'? [y/n] > ", ORANGE)) {
-               println("Cancelled transaction.", RED);
-               break;
-            }
-            
-            // Create transaction and update account.
-            if (tr.createTransaction(transaction(amount, acc.id, receiver.id))) {
-               println("Successfully sent " + str(amount) + "$ to '" 
-               + receiver.name + "'.", GREEN);
-            }
-            acc = db.selectById(acc.id).at(0);
-            break;
-         case 'r':
-            // Get the latest transaction and print it out.
-            trans = tr.getLatestTransaction(acc.id);
-            username = (trans.fromId == acc.id) ? RED : GREEN;
-            println(trans.string(), username);
-            break;
-         case 'l':
-            // Get all of the transactions.
-            transactions = tr.getTransactions(acc.id);
-
-            // Print transactions.
-            for (auto tran : transactions) {
-               username = (tran.fromId == acc.id) ? RED : GREEN;
-               println(tran.string(), username);
-            }
-            break;
-         case 'b':
-            // Print balance.
-            username = (acc.balance < 1) ? RED : GREEN;
-            println("Balance: " + str(acc.balance) + "$", username);
-            break;
-         case 'o':
-            // Get consent from user.
-            if (!getConsent("Are you sure you want to log out? [y/n] > ", ORANGE)) {
-               println("Cancelled.", RED);
-               break;
-            }
-
-            // User logged out of their account.
-            println("Logged out of '" + acc.string() + "'.\n", GREEN);
-            return main();
-         default:
-            // Unknown command.
-            println("Unknown command, try typing 'h' for commands!", RED);
-            break;
+         // If user deleted account then reload the program.
+         if (acc.name == "DELETED") return main();
+         acc = db.selectById(acc.id).at(0);
+         break;
+      case 't':
+         createTransaction(acc, db, tr);
+         acc = db.selectById(acc.id).at(0);
+         break;
+      case 'r':
+         lastTransaction(acc.id, tr);
+         break;
+      case 'l':
+         allTransactions(acc.id, tr);
+         break;
+      case 'b':
+         getBalance(acc.balance);
+         break;
+      case 'o':
+         if (logout(acc)) return main();
+         break;
+      default:
+         // Unknown command.
+         println("Unknown command, try typing 'h' for commands!", RED);
+         break;
       }
    }
    return 0;

@@ -6,7 +6,7 @@
 #include "io.hpp"
 #include "sqlite3.h"
 
-// Constants, feel free to edit.
+// Declare constants for size limits.
 const int INVALID_ID = -1;
 const int MIN_NAME_SIZE = 3;
 const int MAX_NAME_SIZE = 24;
