@@ -128,10 +128,9 @@ inline void createTransaction(account& acc, Accounts& db, Transactions& tr) {
    int amount = getNumber("Amount to send (you have " + str(acc.balance) + "$) "
    "> ", BLUE);
 
-   // Ask user for consent.
-   if (!getConsent("Are you sure you want to send " + str(amount) + "$ to '"
-   + receiver.name + "'? [y/n] > ", ORANGE)) {
-      println("Cancelled transaction.", RED);
+   // Amount sent is above the accounts balance.
+   if (acc.balance < amount) {
+      println("Cannot send more money than you own.", RED);
       return;
    }
 
